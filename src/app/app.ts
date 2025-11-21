@@ -3,10 +3,7 @@ import { RouterOutlet } from '@angular/router';
 
 @Component({
   selector: 'app-root',
+  template: `<router-outlet />`,
   imports: [RouterOutlet],
-  templateUrl: './app.html',
-  styleUrl: './app.css'
 })
-export class App {
-  protected readonly title = signal('mine-sweeper');
-}
+export class App {}
