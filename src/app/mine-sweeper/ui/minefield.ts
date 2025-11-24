@@ -1,10 +1,9 @@
 import { Component, computed, inject, input, output } from '@angular/core';
 import { Field, MineField } from '../types/field';
 import { MinefieldService } from '../data-access/minefield-service';
-import { GameState } from '../types/game-state';
 
 @Component({
-  selector: 'minesweeper-adjacent-mines',
+  selector: 'minesweeper-hint',
   template: `
     @if (mines(); as mines) {
     <span>{{ mines }}</span>
@@ -15,10 +14,14 @@ import { GameState } from '../types/game-state';
     '[class]': 'color()',
   },
 })
-export class AdjacentMinesDirective {
+export class Hint {
   mines = input.required<number>();
   color = computed(() => {
-    switch (this.mines()) {
+    const mines = this.mines();
+    if (mines < 1) {
+      return 'text-red-700';
+    }
+    switch (mines) {
       case 1:
         return 'text-blue-500';
       case 2:
@@ -60,7 +63,7 @@ export class AdjacentMinesDirective {
       @if (field.isRevealed()) { @if (field.isMine()) {
       <span>💣</span>
       } @else {
-      <minesweeper-adjacent-mines [mines]="field.adjacentMines()" />
+      <minesweeper-hint [mines]="field.hint()" />
       } } @else if (field.isFlagged()) {
       <span>🚩</span>
       } @else if (!mfs.playing() && field.isMine()) { @if (field.isFlagged()) {
@@ -78,7 +81,7 @@ export class AdjacentMinesDirective {
     '(mouseleave)': 'field().hovered.set(false)',
     '[class.cursor-pointer]': 'mfs.playing() && !field().isRevealed()',
   },
-  imports: [AdjacentMinesDirective],
+  imports: [Hint],
 })
 export class FieldComponent {
   field = input.required<Field>();

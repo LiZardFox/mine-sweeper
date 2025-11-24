@@ -29,6 +29,15 @@ import { MineSweeperSettings } from './ui/settings';
         class="flex flex-col w-screen h-screen items-center justify-start gap-10 p-4 overflow-auto"
       >
         <minesweeper-minefield />
+
+        <div>
+          <label>Remove Flagged Mines from Hint:</label>
+          <input
+            type="checkbox"
+            (change)="toggleHint()"
+            [checked]="mineFieldService.removeFlaggedMines()"
+          />
+        </div>
         @if(mineFieldService.started()){
         <button
           class="mt-4 px-4 py-2 bg-blue-500 text-white rounded"
@@ -59,4 +68,7 @@ import { MineSweeperSettings } from './ui/settings';
 })
 export default class MineSweeper {
   mineFieldService = inject(MinefieldService);
+  toggleHint() {
+    this.mineFieldService.removeFlaggedMines.update((v) => !v);
+  }
 }

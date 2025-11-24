@@ -1,6 +1,6 @@
 import { computed, effect, Injectable, signal } from '@angular/core';
 import { MineFieldConfiguration } from '../types/minefield-configuration';
-import { Field, MineField } from '../types/field';
+import { Field, FieldState, MineField } from '../types/field';
 import { GameState } from '../types/game-state';
 import { calculateDenityForDimensions } from '../util/calculate-density';
 import { filter, fromEvent } from 'rxjs';
@@ -17,6 +17,7 @@ export class MinefieldService {
   readonly #gameState = signal<GameState>('notStarted');
   readonly #time = signal<{ start: number; end: number | null } | null>(null);
 
+  readonly removeFlaggedMines = signal(false);
   readonly initLazily = signal(true);
 
   readonly dimensions = this.#dimensions.asReadonly();
@@ -68,7 +69,7 @@ export class MinefieldService {
     { dimensions: [16, 16], mines: 40 },
     { dimensions: [16, 30], mines: 99 },
     { dimensions: [3, 3, 3], mines: 5 },
-    { dimensions: [3, 3, 3, 3], mines: 15 },
+    { dimensions: [3, 3, 3, 3], mines: 10 },
     {
       mines: 15,
       dimensions: [3, 3, 3, 3, 3, 3],
@@ -106,13 +107,13 @@ export class MinefieldService {
       return;
     }
     if (field.isRevealed()) {
-      if (field.adjacentMines() === field.flaggedNeighbors().length) {
-        const untouchedNeighbors = field.untouchedNeighbors();
-        untouchedNeighbors.forEach((f) => this.evaluateFieldClick(f));
+      if (field.adjacentMines().length === field.flaggedNeighbors().length) {
+        const hiddenNeighbors = field.hiddenNeighbors();
+        hiddenNeighbors.forEach((f) => this.evaluateFieldClick(f));
       }
       return;
     }
-    field.isRevealed.set(true);
+    field.state.set(FieldState.Revealed);
     if (!this.#minesPlaced()) {
       const minefield = this.#mineField();
       if (minefield) {
@@ -120,7 +121,7 @@ export class MinefieldService {
         this.#minesPlaced.set(true);
       }
     }
-    if (!field.isMine() && field.adjacentMines() === 0) {
+    if (!field.isMine() && field.adjacentMines().length === 0) {
       this.zeroSpread(field);
     }
     if (field.isMine()) {
@@ -134,13 +135,16 @@ export class MinefieldService {
       return;
     }
     if (field.isRevealed()) {
-      const unrevealedNeighbors = field.unrevealedNeighbors();
-      if (field.adjacentMines() === unrevealedNeighbors.length) {
-        unrevealedNeighbors.filter((f) => !f.isFlagged()).forEach((f) => this.evaluateFieldFlag(f));
+      const hiddenNeighbors = field.hiddenNeighbors();
+      if (
+        field.adjacentMines().length ===
+        hiddenNeighbors.length + field.flaggedNeighbors().length
+      ) {
+        hiddenNeighbors.forEach((f) => this.evaluateFieldFlag(f));
       }
       return;
     }
-    field.isFlagged.set(!field.isFlagged());
+    field.state.update((v) => (v === FieldState.Hidden ? FieldState.Flagged : FieldState.Hidden));
   }
 
   zeroSpread(field: Field) {
@@ -149,10 +153,10 @@ export class MinefieldService {
     while (queue.length > 0) {
       const currentField = queue.shift()!;
       visited.add(currentField);
-      currentField.untouchedNeighbors().forEach((neighbor) => {
+      currentField.hiddenNeighbors().forEach((neighbor) => {
         if (!visited.has(neighbor) && !neighbor.isMine()) {
-          neighbor.isRevealed.set(true);
-          if (neighbor.adjacentMines() === 0) {
+          neighbor.state.set(FieldState.Revealed);
+          if (neighbor.adjacentMines().length === 0) {
             queue.push(neighbor);
           }
         }
@@ -161,7 +165,7 @@ export class MinefieldService {
   }
 
   constructor() {
-    this.setConfiguration(this.preDefinedMinefields[0]);
+    this.setConfiguration(this.preDefinedMinefields[4]);
     fromEvent(document, 'keydown')
       .pipe(
         filter(
@@ -208,6 +212,8 @@ export class MinefieldService {
   }
 
   private validateConfiguration(configuration: MineFieldConfiguration) {
+    console.log(configuration);
+
     const totalCells = configuration.dimensions.reduce((acc, val) => acc * val, 1);
     if (configuration.dimensions.length > 6) {
       throw new Error(
@@ -247,42 +253,46 @@ export class MinefieldService {
 
   private createEmptyMinefield(dimensions: number[], wrap: boolean[] = []): MineField {
     wrap = dimensions.map((_, index) => wrap[index] ?? false);
-    const createField = (dims: number[], dimIndex: number): any => {
+    const createField = (dims: number[], dimIndex: number, coordinates: number[] = []): any => {
       const size = dims[dimIndex];
       const isLastDimension = dimIndex === dims.length - 1;
       const fieldArray = new Array(size);
       for (let i = 0; i < size; i++) {
-        fieldArray[i] = isLastDimension ? new Field() : createField(dims, dimIndex + 1);
+        isLastDimension;
+        fieldArray[i] = isLastDimension
+          ? new Field([...coordinates, i], { removeFlaggedMine: this.removeFlaggedMines })
+          : createField(dims, dimIndex + 1, [...coordinates, i]);
       }
       return fieldArray;
     };
     const minefield = createField(dimensions, 0);
     this.linkAdjacentFields(minefield, dimensions, wrap);
+    console.log('created the field', minefield);
+
     return minefield;
   }
   private linkAdjacentFields(minefield: MineField, dimensions: number[], wrap: boolean[]): void {
-    const linkFields = (currentField: any, coords: number[], dimIndex: number) => {
-      if (dimIndex === dimensions.length) {
-        const field = currentField as Field;
-        const adjacentCoords = this.getAdjacentCoordinates(coords, dimensions, wrap);
-        for (const adjCoords of adjacentCoords) {
-          let adjacentField: any = minefield;
-          for (const index of adjCoords) {
-            adjacentField = adjacentField[index];
-          }
-          field.adjacentFields.update((v) => [...v, adjacentField as Field]);
+    const flatFields = this.flattenMinefield(minefield);
+    const coordToFieldMap = new Map<string, Field>();
+    flatFields.forEach((field) => {
+      coordToFieldMap.set(field.coordinates.join(','), field);
+    });
+    flatFields.forEach((field) => {
+      const adjacentCoords = this.getAdjacentCoordinates(field.coordinates, dimensions, wrap);
+      const adjacentFields: Field[] = [];
+      adjacentCoords.forEach((coords) => {
+        const key = coords.join(',');
+        const adjacentField = coordToFieldMap.get(key);
+        if (adjacentField) {
+          adjacentFields.push(adjacentField);
         }
-        return;
-      }
-      for (let i = 0; i < dimensions[dimIndex]; i++) {
-        linkFields(currentField[i], [...coords, i], dimIndex + 1);
-      }
-    };
-    linkFields(minefield, [], 0);
+      });
+      field.adjacentFields.set(adjacentFields);
+    });
   }
 
   private getAdjacentCoordinates(
-    coords: number[],
+    coords: Readonly<ReadonlyArray<number>>,
     dimensions: number[],
     wrap: boolean[]
   ): number[][] {

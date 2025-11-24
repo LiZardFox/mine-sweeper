@@ -5,6 +5,7 @@ import { Field, form, submit } from '@angular/forms/signals';
 import { FormError } from './form-error';
 import { MineFieldConfiguration } from '../types/minefield-configuration';
 import { JsonPipe } from '@angular/common';
+import { calculateDenityForDimensions } from '../util/calculate-density';
 
 @Component({
   selector: 'minesweeper-settings',
@@ -70,11 +71,12 @@ export class MineSweeperSettings {
   readonly settingsForm = form(this.settings, settingsSchema);
   constructor() {
     effect(() => {
-      const [dimensions, wrap, mines, lazyInit] = [
+      const [dimensions, wrap, mines, lazyInit, removeFlaggedMines] = [
         [...this.mfs.dimensions()].reverse(),
         [...this.mfs.wrap()].reverse(),
         this.mfs.mines(),
         this.mfs.initLazily(),
+        this.mfs.removeFlaggedMines(),
       ];
       this.settings.set({
         dimensions: dimensions.map((size, idx) => ({ size, wrap: wrap[idx] })),
