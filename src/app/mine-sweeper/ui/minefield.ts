@@ -1,96 +1,31 @@
 import { Component, computed, inject, input, output } from '@angular/core';
-import { Field, MineField } from '../types/field';
+import { Cell, MineField } from '../types/field';
 import { MinefieldService } from '../data-access/minefield-service';
 
 @Component({
-  selector: 'minesweeper-hint',
+  selector: 'minesweeper-cell',
   template: `
-    @if (mines(); as mines) {
-    <span>{{ mines }}</span>
-    }
-  `,
-  host: {
-    class: 'font-bold',
-    '[class]': 'color()',
-  },
-})
-export class Hint {
-  mines = input.required<number>();
-  color = computed(() => {
-    const mines = this.mines();
-    if (mines < 1) {
-      return 'text-red-700';
-    }
-    switch (mines) {
-      case 1:
-        return 'text-blue-500';
-      case 2:
-        return 'text-green-600';
-      case 3:
-        return 'text-red-500';
-      case 4:
-        return 'text-purple-500';
-      case 5:
-        return 'text-orange-500';
-      case 6:
-        return 'text-cyan-600';
-      case 7:
-        return 'text-gray-500';
-      case 8:
-        return 'text-black';
-      default:
-        return 'text-white';
-    }
-  });
-}
-
-@Component({
-  selector: 'minesweeper-field',
-  template: `
-    @if (field(); as field) {
-    <div
-      class="border border-gray-700 w-8 h-8 flex items-center justify-center"
-      [class.border-yellow-300]="field.highlight() && !field.hovered() && mfs.playing()"
-      [class.border-orange-500]="field.hovered() && mfs.playing()"
-      [class.bg-gray-500]="!field.isRevealed()"
-      [class.bg-gray-400]="field.isRevealed()"
-      [class.bg-green-700]="!mfs.playing() && field.isMine()"
-      [class.bg-red-700]="
-        !mfs.playing() &&
-        ((field.isMine() && field.isRevealed()) || (field.isFlagged() && !field.isMine()))
-      "
-    >
-      @if (field.isRevealed()) { @if (field.isMine()) {
-      <span>💣</span>
-      } @else {
-      <minesweeper-hint [mines]="field.hint()" />
-      } } @else if (field.isFlagged()) {
-      <span>🚩</span>
-      } @else if (!mfs.playing() && field.isMine()) { @if (field.isFlagged()) {
-      <span>🚩</span>
-      } @else {
-      <span>💣</span>
-      } }
+    @if (cell(); as cell) {
+    <div class="w-8 h-8 flex items-center justify-center" [class]="cell.classes()">
+      <span class="font-bold">{{ cell.symbol() }}</span>
     </div>
     }
   `,
   host: {
-    '(click)': 'mfs.evaluateFieldClick(field())',
-    '(contextmenu)': 'mfs.evaluateFieldFlag(field()); $event.preventDefault()',
-    '(mouseenter)': 'field().hovered.set(true)',
-    '(mouseleave)': 'field().hovered.set(false)',
-    '[class.cursor-pointer]': 'mfs.playing() && !field().isRevealed()',
+    '(click)': 'mfs.evaluateCellClick(cell())',
+    '(contextmenu)': 'mfs.evaluateCellFlag(cell()); $event.preventDefault()',
+    '(mouseenter)': 'cell().hovered.set(true)',
+    '(mouseleave)': 'cell().hovered.set(false)',
   },
-  imports: [Hint],
 })
-export class FieldComponent {
-  field = input.required<Field>();
+export class CellComponent {
+  cell = input.required<Cell>();
   mfs = inject(MinefieldService);
 }
 
 @Component({
   selector: 'minesweeper-minefield-dimension',
-  imports: [FieldComponent],
+  imports: [CellComponent],
   template: `
     <div
       class="flex"
@@ -101,7 +36,7 @@ export class FieldComponent {
       @for (subDimension of subDimensions(); track subDimension) {
       <minesweeper-minefield-dimension [minefield]="subDimension" [dimension]="dimension() - 1" />
       } @if (dimension() === 0) { @for (field of fields(); track field) {
-      <minesweeper-field [field]="field" />
+      <minesweeper-cell [cell]="field" />
       } }
     </div>
   `,
@@ -119,7 +54,7 @@ export class MinefieldDimensionComponent {
     if (this.dimension() !== 0) {
       return [];
     }
-    return this.minefield() as Field[];
+    return this.minefield() as Cell[];
   });
   horizontal = computed(() => this.dimension() % 2 === 0);
   gap = computed(() => {

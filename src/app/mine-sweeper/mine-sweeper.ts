@@ -15,7 +15,7 @@ import { MineSweeperSettings } from './ui/settings';
             Remaining Cells / Mines:
             <span>
               <span>
-                {{ mineFieldService.remainingFields().length }}
+                {{ mineFieldService.remainingCells().length }}
               </span>
               <span>/</span>
               <span>

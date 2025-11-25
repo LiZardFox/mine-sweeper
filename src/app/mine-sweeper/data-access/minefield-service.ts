@@ -1,9 +1,10 @@
 import { computed, effect, Injectable, signal } from '@angular/core';
 import { MineFieldConfiguration } from '../types/minefield-configuration';
-import { Field, FieldState, MineField } from '../types/field';
+import { Cell, CellState, MineField } from '../types/field';
 import { GameState } from '../types/game-state';
 import { calculateDenityForDimensions } from '../util/calculate-density';
 import { filter, fromEvent } from 'rxjs';
+import { MineType } from '../types/mine';
 
 @Injectable({
   providedIn: 'root',
@@ -43,20 +44,20 @@ export class MinefieldService {
   );
   readonly flattendMinefield = computed(() => this.flattenMinefield(this.#mineField() || []));
   readonly minesLeft = computed(() => {
-    const flaggedCount = this.flaggedFields().length;
+    const flaggedCount = this.flaggedCells().length;
     return this.#mines() - flaggedCount;
   });
-  readonly unrevealedFields = computed(() => {
-    const fields = this.flattendMinefield();
-    return fields.filter((field) => !field.isRevealed());
+  readonly unrevealedCells = computed(() => {
+    const cells = this.flattendMinefield();
+    return cells.filter((cell) => !cell.isRevealed());
   });
-  readonly flaggedFields = computed(() => {
-    const fields = this.flattendMinefield();
-    return fields.filter((field) => field.isFlagged());
+  readonly flaggedCells = computed(() => {
+    const cells = this.flattendMinefield();
+    return cells.filter((cell) => cell.isFlagged());
   });
-  readonly remainingFields = computed(() => {
-    const fields = this.flattendMinefield();
-    return fields.filter((field) => !field.isRevealed() && !field.isFlagged());
+  readonly remainingCells = computed(() => {
+    const cells = this.flattendMinefield();
+    return cells.filter((cell) => !cell.isRevealed() && !cell.isFlagged());
   });
   readonly started = computed(() => this.#gameState() !== 'notStarted');
   readonly playing = computed(() => this.#gameState() === 'inProgress');
@@ -102,18 +103,18 @@ export class MinefieldService {
     this.#time.set({ start: Date.now(), end: null });
   }
 
-  evaluateFieldClick(field: Field) {
-    if (!this.playing || field.isFlagged()) {
+  evaluateCellClick(cell: Cell) {
+    if (!this.playing || cell.isFlagged()) {
       return;
     }
-    if (field.isRevealed()) {
-      if (field.adjacentMines().length === field.flaggedNeighbors().length) {
-        const hiddenNeighbors = field.hiddenNeighbors();
-        hiddenNeighbors.forEach((f) => this.evaluateFieldClick(f));
+    if (cell.isRevealed()) {
+      if (cell.adjacentMines().length === cell.flaggedNeighbors().length) {
+        const hiddenNeighbors = cell.hiddenNeighbors();
+        hiddenNeighbors.forEach((f) => this.evaluateCellClick(f));
       }
       return;
     }
-    field.state.set(FieldState.Revealed);
+    cell.state.set(CellState.Revealed);
     if (!this.#minesPlaced()) {
       const minefield = this.#mineField();
       if (minefield) {
@@ -121,41 +122,38 @@ export class MinefieldService {
         this.#minesPlaced.set(true);
       }
     }
-    if (!field.isMine() && field.adjacentMines().length === 0) {
-      this.zeroSpread(field);
+    if (!cell.isMine() && cell.adjacentMines().length === 0) {
+      this.zeroSpread(cell);
     }
-    if (field.isMine()) {
+    if (cell.isMine()) {
       this.gameLost();
       return;
     }
   }
 
-  evaluateFieldFlag(field: Field) {
+  evaluateCellFlag(cell: Cell) {
     if (!this.playing()) {
       return;
     }
-    if (field.isRevealed()) {
-      const hiddenNeighbors = field.hiddenNeighbors();
-      if (
-        field.adjacentMines().length ===
-        hiddenNeighbors.length + field.flaggedNeighbors().length
-      ) {
-        hiddenNeighbors.forEach((f) => this.evaluateFieldFlag(f));
+    if (cell.isRevealed()) {
+      const hiddenNeighbors = cell.hiddenNeighbors();
+      if (cell.adjacentMines().length === hiddenNeighbors.length + cell.flaggedNeighbors().length) {
+        hiddenNeighbors.forEach((f) => this.evaluateCellFlag(f));
       }
       return;
     }
-    field.state.update((v) => (v === FieldState.Hidden ? FieldState.Flagged : FieldState.Hidden));
+    cell.state.update((v) => (v === CellState.Hidden ? CellState.Flagged : CellState.Hidden));
   }
 
-  zeroSpread(field: Field) {
-    const queue: Field[] = [field];
-    const visited = new Set<Field>();
+  zeroSpread(cell: Cell) {
+    const queue: Cell[] = [cell];
+    const visited = new Set<Cell>();
     while (queue.length > 0) {
-      const currentField = queue.shift()!;
-      visited.add(currentField);
-      currentField.hiddenNeighbors().forEach((neighbor) => {
+      const currentCell = queue.shift()!;
+      visited.add(currentCell);
+      currentCell.hiddenNeighbors().forEach((neighbor) => {
         if (!visited.has(neighbor) && !neighbor.isMine()) {
-          neighbor.state.set(FieldState.Revealed);
+          neighbor.state.set(CellState.Revealed);
           if (neighbor.adjacentMines().length === 0) {
             queue.push(neighbor);
           }
@@ -184,7 +182,7 @@ export class MinefieldService {
 
     effect(() => {
       if (this.#gameState() === 'inProgress') {
-        const [mines, unrevealedFields] = [this.#mines(), this.unrevealedFields().length];
+        const [mines, unrevealedFields] = [this.#mines(), this.unrevealedCells().length];
         if (mines === unrevealedFields) {
           this.gameWon();
         }
@@ -247,7 +245,7 @@ export class MinefieldService {
       }
       const randomIndex = Math.floor(Math.random() * flatEmptyFields.length);
       const fieldToPlant = flatEmptyFields[randomIndex];
-      fieldToPlant.isMine.set(true);
+      fieldToPlant.mineType.set(MineType.REGULAR);
     }
   }
 
@@ -260,7 +258,10 @@ export class MinefieldService {
       for (let i = 0; i < size; i++) {
         isLastDimension;
         fieldArray[i] = isLastDimension
-          ? new Field([...coordinates, i], { removeFlaggedMine: this.removeFlaggedMines })
+          ? new Cell([...coordinates, i], {
+              removeFlaggedMine: this.removeFlaggedMines,
+              playing: this.playing,
+            })
           : createField(dims, dimIndex + 1, [...coordinates, i]);
       }
       return fieldArray;
@@ -273,21 +274,21 @@ export class MinefieldService {
   }
   private linkAdjacentFields(minefield: MineField, dimensions: number[], wrap: boolean[]): void {
     const flatFields = this.flattenMinefield(minefield);
-    const coordToFieldMap = new Map<string, Field>();
+    const coordToCellMap = new Map<string, Cell>();
     flatFields.forEach((field) => {
-      coordToFieldMap.set(field.coordinates.join(','), field);
+      coordToCellMap.set(field.coordinates.join(','), field);
     });
     flatFields.forEach((field) => {
       const adjacentCoords = this.getAdjacentCoordinates(field.coordinates, dimensions, wrap);
-      const adjacentFields: Field[] = [];
+      const adjacentCells: Cell[] = [];
       adjacentCoords.forEach((coords) => {
         const key = coords.join(',');
-        const adjacentField = coordToFieldMap.get(key);
-        if (adjacentField) {
-          adjacentFields.push(adjacentField);
+        const adjacentCell = coordToCellMap.get(key);
+        if (adjacentCell) {
+          adjacentCells.push(adjacentCell);
         }
       });
-      field.adjacentFields.set(adjacentFields);
+      field.adjacentCells.set(adjacentCells);
     });
   }
 
@@ -319,13 +320,13 @@ export class MinefieldService {
     return adjacentCoords;
   }
 
-  private flattenMinefield(minefield: MineField): Field[] {
-    const flatList: Field[] = [];
-    const flatten = (currentField: MineField) => {
-      if (currentField instanceof Field) {
-        flatList.push(currentField);
+  private flattenMinefield(minefield: MineField): Cell[] {
+    const flatList: Cell[] = [];
+    const flatten = (currentCell: MineField) => {
+      if (currentCell instanceof Cell) {
+        flatList.push(currentCell);
       } else {
-        for (const subField of currentField) {
+        for (const subField of currentCell) {
           flatten(subField);
         }
       }
