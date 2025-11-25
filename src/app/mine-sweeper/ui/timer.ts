@@ -1,6 +1,6 @@
 import { Component, inject, Pipe, PipeTransform } from '@angular/core';
 import { MinefieldService } from '../data-access/minefield-service';
-import { interval, map } from 'rxjs';
+import { animationFrames, interval, map } from 'rxjs';
 import { toSignal } from '@angular/core/rxjs-interop';
 
 @Pipe({
@@ -20,14 +20,13 @@ export class TimePipe implements PipeTransform {
 
 @Component({
   selector: 'minesweeper-timer',
-  template: `
-    <div class="font-mono">Time Elapsed: {{ elapsedTime() | time }}</div>
-  `,
+  template: ` <div class="font-mono">Time Elapsed: {{ elapsedTime() | time }}</div> `,
   imports: [TimePipe],
 })
 export class Timer {
   readonly mfs = inject(MinefieldService);
-  readonly #elapsedTime$ = interval(10).pipe(
+
+  readonly #elapsedTime$ = animationFrames().pipe(
     map(() => {
       const time = this.mfs.time();
       if (time === null) {
@@ -37,7 +36,7 @@ export class Timer {
         return time.end - time.start;
       }
       return Date.now() - time.start;
-    }),
+    })
   );
   readonly elapsedTime = toSignal(this.#elapsedTime$, { initialValue: 0 });
 }

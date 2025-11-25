@@ -1,7 +1,8 @@
-import { Cell } from './field';
+export type MineType = null | MineFn;
 
-export enum MineType {
-  REGULAR,
-}
-
-export type MineCalcFn = (coordinates: ReadonlyArray<number>, adjacentCells: Cell[]) => number;
+export type CreateMineFn = (coordinates: ReadonlyArray<number>) => MineFn;
+export type MineFn = (neighborCoordinates: ReadonlyArray<number>) => MineConfig;
+export type MineConfig = {
+  number: number;
+  colorNumber: number;
+};

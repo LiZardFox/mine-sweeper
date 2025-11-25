@@ -4,7 +4,7 @@ import { Cell, CellState, MineField } from '../types/field';
 import { GameState } from '../types/game-state';
 import { calculateDenityForDimensions } from '../util/calculate-density';
 import { filter, fromEvent } from 'rxjs';
-import { MineType } from '../types/mine';
+import { MineType } from '../util/mineFn';
 
 @Injectable({
   providedIn: 'root',
@@ -245,7 +245,7 @@ export class MinefieldService {
       }
       const randomIndex = Math.floor(Math.random() * flatEmptyFields.length);
       const fieldToPlant = flatEmptyFields[randomIndex];
-      fieldToPlant.mineType.set(MineType.REGULAR);
+      fieldToPlant.mineType.set([MineType.numberMine, MineType.colorMine][i % 2]);
     }
   }
 

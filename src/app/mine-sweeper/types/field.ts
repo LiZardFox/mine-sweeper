@@ -1,5 +1,7 @@
 import { computed, Signal, signal } from '@angular/core';
 import { MineType } from './mine';
+import { liar, mineSum } from '../util/modifiers';
+import { addMineConfig, configFromNumber } from '../util/mineFn';
 
 export enum CellState {
   Flagged,
@@ -27,11 +29,14 @@ export class Cell {
     this.adjacentCells().filter((cell) => cell.isFlagged())
   );
   readonly adjacentMines = computed(() => this.adjacentCells().filter((cell) => cell.isMine()));
-  readonly hint = computed(() =>
-    this.removeFlaggedMine()
-      ? this.adjacentMines().length - this.flaggedNeighbors().length
-      : this.adjacentMines().length
-  );
+  readonly hint = computed(() => {
+    const sum = liar(this.adjacentCells(), this.coordinates);
+    return sum === null
+      ? null
+      : this.removeFlaggedMine()
+      ? addMineConfig(sum, configFromNumber(-this.flaggedNeighbors().length))
+      : sum;
+  });
   readonly highlight = computed(() => this.adjacentCells().some((cell) => cell.hovered()));
 
   readonly symbol = computed(() => {
@@ -45,11 +50,11 @@ export class Cell {
       return '💣';
     }
     const hint = this.hint();
-    return hint !== 0 ? hint.toString() : '';
+    return hint === null ? '?' : hint.number.toString();
   });
   readonly color = computed(() => {
     const hint = this.hint();
-    switch (hint) {
+    switch (hint?.colorNumber) {
       case 1:
         return 'text-blue-600';
       case 2:
@@ -67,7 +72,11 @@ export class Cell {
       case 8:
         return 'text-black';
       default:
-        return hint < 0 ? 'text-red-800' : 'text-white';
+        return hint === null
+          ? 'text-gray-400'
+          : hint.colorNumber < 0
+          ? 'text-red-800'
+          : 'text-white';
     }
   });
   readonly backgroundColor = computed(() => {
