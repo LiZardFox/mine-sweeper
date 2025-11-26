@@ -1,7 +1,8 @@
 import { computed, Signal, signal } from '@angular/core';
-import { MineType } from './mine';
-import { liar, mineSum } from '../util/modifiers';
-import { addMineConfig, configFromNumber } from '../util/mineFn';
+import { Mine, MineType } from './mine';
+import { executeHintFnChain } from '../util/hint';
+import { addMineConfig } from '../util/mineFn';
+import { HintFnChain } from './hintFn';
 
 export enum CellState {
   Flagged,
@@ -9,15 +10,18 @@ export enum CellState {
   Hidden,
 }
 
+export type CellSymbol = number | MineType | 'flag' | '?' | null;
+
 export class Cell {
   readonly coordinates: ReadonlyArray<number>;
+  readonly hintChain: HintFnChain;
   private readonly removeFlaggedMine: Signal<boolean>;
   private readonly playing: Signal<boolean>;
-  readonly mineType = signal<MineType | null>(null);
+  readonly mine = signal<Mine | null>(null);
   readonly adjacentCells = signal<Cell[]>([]);
   readonly hovered = signal(false);
   readonly state = signal<CellState>(CellState.Hidden);
-  readonly isMine = computed(() => this.mineType() !== null);
+  readonly isMine = computed(() => this.mine() !== null);
   readonly isFlagged = computed(() => this.state() === CellState.Flagged);
   readonly isRevealed = computed(() => this.state() === CellState.Revealed);
   readonly isHidden = computed(() => this.state() === CellState.Hidden);
@@ -30,54 +34,68 @@ export class Cell {
   );
   readonly adjacentMines = computed(() => this.adjacentCells().filter((cell) => cell.isMine()));
   readonly hint = computed(() => {
-    const sum = liar(this.adjacentCells(), this.coordinates);
-    return sum === null
-      ? null
-      : this.removeFlaggedMine()
-      ? addMineConfig(sum, configFromNumber(-this.flaggedNeighbors().length))
-      : sum;
+    const sum = executeHintFnChain(this.hintChain, this.adjacentCells(), this.coordinates);
+    if (typeof sum === 'object' && sum !== null) {
+      if (this.removeFlaggedMine()) {
+        const flaggedMinesConf = executeHintFnChain(
+          this.hintChain,
+          this.flaggedNeighbors(),
+          this.coordinates
+        );
+        return typeof flaggedMinesConf == 'object' && flaggedMinesConf !== null
+          ? addMineConfig(sum, {
+              number: -flaggedMinesConf.number,
+              colorNumber: -flaggedMinesConf.colorNumber,
+            })
+          : sum;
+      }
+    }
+    return sum;
   });
   readonly highlight = computed(() => this.adjacentCells().some((cell) => cell.hovered()));
 
-  readonly symbol = computed(() => {
+  readonly symbol = computed<CellSymbol>(() => {
     if (this.isFlagged()) {
-      return '🚩';
+      return 'flag';
     }
+    const mine = this.mine();
     if (!this.isRevealed()) {
-      return !this.playing() && this.isMine() ? '💣' : '';
+      return !this.playing() && mine ? mine.type : null;
     }
-    if (this.isMine()) {
-      return '💣';
+    if (mine) {
+      return mine.type;
     }
     const hint = this.hint();
-    return hint === null ? '?' : hint.number.toString();
+    return typeof hint === 'object' && hint !== null ? hint.number : hint;
   });
   readonly color = computed(() => {
     const hint = this.hint();
-    switch (hint?.colorNumber) {
-      case 1:
-        return 'text-blue-600';
-      case 2:
-        return 'text-green-600';
-      case 3:
-        return 'text-red-600';
-      case 4:
-        return 'text-purple-600';
-      case 5:
-        return 'text-orange-600';
-      case 6:
-        return 'text-cyan-600';
-      case 7:
-        return 'text-gray-600';
-      case 8:
-        return 'text-black';
-      default:
-        return hint === null
-          ? 'text-gray-400'
-          : hint.colorNumber < 0
-          ? 'text-red-800'
-          : 'text-white';
+    if (typeof hint === 'object' && hint !== null) {
+      if (hint === null || (hint.number === 0 && hint.colorNumber === 0)) {
+        return 'text-transparent';
+      }
+      switch (hint?.colorNumber) {
+        case 1:
+          return 'text-blue-600';
+        case 2:
+          return 'text-green-600';
+        case 3:
+          return 'text-red-600';
+        case 4:
+          return 'text-purple-600';
+        case 5:
+          return 'text-orange-600';
+        case 6:
+          return 'text-cyan-600';
+        case 7:
+          return 'text-gray-600';
+        case 8:
+          return 'text-black';
+        default:
+          return 'text-white';
+      }
     }
+    return 'text-gray-400';
   });
   readonly backgroundColor = computed(() => {
     const [playing, mine, revealed, flagged] = [
@@ -117,11 +135,14 @@ export class Cell {
 
   constructor(
     coordinates: number[],
-    options: { removeFlaggedMine: Signal<boolean>; playing: Signal<boolean> }
+    hintChain: HintFnChain,
+    removeFlaggedMine: Signal<boolean>,
+    playing: Signal<boolean>
   ) {
     this.coordinates = coordinates;
-    this.removeFlaggedMine = options.removeFlaggedMine;
-    this.playing = options.playing;
+    this.hintChain = hintChain;
+    this.removeFlaggedMine = removeFlaggedMine;
+    this.playing = playing;
   }
 }
 

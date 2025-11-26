@@ -4,7 +4,9 @@ import { Cell, CellState, MineField } from '../types/field';
 import { GameState } from '../types/game-state';
 import { calculateDenityForDimensions } from '../util/calculate-density';
 import { filter, fromEvent } from 'rxjs';
-import { MineType } from '../util/mineFn';
+import { Mines } from '../util/mineFn';
+import { Mine } from '../types/mine';
+import { liar, sumMines } from '../util/hint';
 
 @Injectable({
   providedIn: 'root',
@@ -15,8 +17,10 @@ export class MinefieldService {
   readonly #wrap = signal<boolean[]>([]);
   readonly #mines = signal(0);
   readonly #mineField = signal<MineField | null>(null);
+  readonly #minesToPlace = signal<Mine[]>([Mines.number, Mines.color, Mines.regular]);
   readonly #gameState = signal<GameState>('notStarted');
   readonly #time = signal<{ start: number; end: number | null } | null>(null);
+  readonly #failOnWrongFlags = signal(true);
 
   readonly removeFlaggedMines = signal(false);
   readonly initLazily = signal(true);
@@ -104,7 +108,7 @@ export class MinefieldService {
   }
 
   evaluateCellClick(cell: Cell) {
-    if (!this.playing || cell.isFlagged()) {
+    if (!this.playing() || cell.isFlagged()) {
       return;
     }
     if (cell.isRevealed()) {
@@ -143,6 +147,10 @@ export class MinefieldService {
       return;
     }
     cell.state.update((v) => (v === CellState.Hidden ? CellState.Flagged : CellState.Hidden));
+    if (this.#failOnWrongFlags() && !cell.isMine()) {
+      this.gameLost();
+      return;
+    }
   }
 
   zeroSpread(cell: Cell) {
@@ -163,7 +171,7 @@ export class MinefieldService {
   }
 
   constructor() {
-    this.setConfiguration(this.preDefinedMinefields[4]);
+    this.setConfiguration(this.preDefinedMinefields[5]);
     fromEvent(document, 'keydown')
       .pipe(
         filter(
@@ -179,7 +187,6 @@ export class MinefieldService {
           this.#gameState.set('inProgress');
         }
       });
-
     effect(() => {
       if (this.#gameState() === 'inProgress') {
         const [mines, unrevealedFields] = [this.#mines(), this.unrevealedCells().length];
@@ -245,8 +252,14 @@ export class MinefieldService {
       }
       const randomIndex = Math.floor(Math.random() * flatEmptyFields.length);
       const fieldToPlant = flatEmptyFields[randomIndex];
-      fieldToPlant.mineType.set([MineType.numberMine, MineType.colorMine][i % 2]);
+      fieldToPlant.mine.set(this.randomMine());
     }
+  }
+
+  private randomMine(): Mine {
+    const mines = this.#minesToPlace();
+    const randomIndex = Math.floor(Math.random() * mines.length);
+    return mines[randomIndex];
   }
 
   private createEmptyMinefield(dimensions: number[], wrap: boolean[] = []): MineField {
@@ -258,10 +271,14 @@ export class MinefieldService {
       for (let i = 0; i < size; i++) {
         isLastDimension;
         fieldArray[i] = isLastDimension
-          ? new Cell([...coordinates, i], {
-              removeFlaggedMine: this.removeFlaggedMines,
-              playing: this.playing,
-            })
+          ? new Cell(
+              [...coordinates, i],
+              {
+                fn: sumMines,
+              },
+              this.removeFlaggedMines,
+              this.playing
+            )
           : createField(dims, dimIndex + 1, [...coordinates, i]);
       }
       return fieldArray;

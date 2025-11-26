@@ -1,11 +1,9 @@
-import { Component, effect, inject, signal } from '@angular/core';
+import { Component, effect, inject, model, signal } from '@angular/core';
 import { MinefieldService } from '../data-access/minefield-service';
 import { MinefieldSettings, settingsSchema } from '../types/minefield-settings';
 import { Field, form, submit } from '@angular/forms/signals';
 import { FormError } from './form-error';
 import { MineFieldConfiguration } from '../types/minefield-configuration';
-import { JsonPipe } from '@angular/common';
-import { calculateDenityForDimensions } from '../util/calculate-density';
 
 @Component({
   selector: 'minesweeper-settings',

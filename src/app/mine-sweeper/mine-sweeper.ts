@@ -1,4 +1,4 @@
-import { Component, inject } from '@angular/core';
+import { Component, inject, signal } from '@angular/core';
 import { MinefieldService } from './data-access/minefield-service';
 import { MineFieldComponent } from './ui/minefield';
 import { Timer } from './ui/timer';
@@ -47,7 +47,7 @@ import { MineSweeperSettings } from './ui/settings';
         >}
       </div>
     </div>
-    @if(!mineFieldService.playing()){
+    @if(!mineFieldService.playing()){ @if(!viewField()){
     <div
       class="fixed top-0 bottom-0 right-0 left-0 flex flex-col gap-5 justify-center items-center bg-black/50 text-white"
     >
@@ -62,12 +62,13 @@ import { MineSweeperSettings } from './ui/settings';
       }
       <minesweeper-settings />
     </div>
-    }
+    } }
   `,
   imports: [MineFieldComponent, Timer, MineSweeperSettings],
 })
 export default class MineSweeper {
   mineFieldService = inject(MinefieldService);
+  viewField = signal(false);
   toggleHint() {
     this.mineFieldService.removeFlaggedMines.update((v) => !v);
   }
