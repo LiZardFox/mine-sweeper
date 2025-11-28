@@ -1,8 +1,17 @@
-export type Mine = null | {
-  fn: MineFn;
+export type MineDef = {
   type: MineType;
+  fn: CreateMineFn;
+  name: string;
+  description: string;
+  hint?: HintType;
 };
 
+export type Mine = {
+  type: MineType;
+  fn: MineFn;
+} | null;
+
+export type HintType = 'color';
 export enum MineType {
   REGULAR = 'regular',
   BIG = 'big',

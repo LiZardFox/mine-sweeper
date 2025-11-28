@@ -46,10 +46,41 @@ export const numberMine: MineFn = () => ({ number: 1, colorNumber: 0 });
 export const colorMine: MineFn = () => ({ number: 0, colorNumber: 1 });
 
 export const Mines = {
-  regular: { type: MineType.REGULAR, fn: regular },
-  big: { type: MineType.BIG, fn: big },
-  cardinal: { type: MineType.CARDINAL, fn: cardinal },
-  diagonal: { type: MineType.DIAGONAL, fn: diagonal },
-  number: { type: MineType.NUMBER, fn: numberMine },
-  color: { type: MineType.COLOR, fn: colorMine },
+  regular: {
+    type: MineType.REGULAR,
+    fn: () => regular,
+    name: 'Regular Mine',
+    description: 'A standard mine that increases the mine count by 1.',
+  },
+  big: {
+    type: MineType.BIG,
+    fn: () => big,
+    name: 'Big Mine',
+    description: 'A big mine that increases the mine count by 2.',
+  },
+  cardinal: {
+    type: MineType.CARDINAL,
+    fn: cardinal,
+    name: 'Cardinal Mine',
+    description: 'A mine that affects only cardinal (N, S, E, W) neighbors.',
+  },
+  diagonal: {
+    type: MineType.DIAGONAL,
+    fn: diagonal,
+    name: 'Diagonal Mine',
+    description: 'A mine that affects only diagonal neighbors.',
+  },
+  number: {
+    type: MineType.NUMBER,
+    fn: () => numberMine,
+    name: 'Number Mine',
+    description: 'A mine that increases the numeric mine count by 1.',
+  },
+  color: {
+    type: MineType.COLOR,
+    fn: () => colorMine,
+    name: 'Color Mine',
+    description: 'A mine that increases the color mine count by 1.',
+    hint: 'color',
+  },
 } as const;

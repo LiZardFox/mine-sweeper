@@ -10,11 +10,15 @@ import {
   validate,
 } from '@angular/forms/signals';
 import { calculateDenityForDimensions } from '../util/calculate-density';
+import { MineDef } from './mine';
 
 export type MinefieldSettings = {
   dimensions: { size: number; wrap: boolean }[];
   mines: number;
   lazyInit: boolean;
+  minesToPlace: MineDef[];
+  chording: boolean;
+  failOnWrongFlag: boolean;
 };
 
 export const settingsSchema = schema<MinefieldSettings>((path) => {
@@ -39,6 +43,16 @@ export const settingsSchema = schema<MinefieldSettings>((path) => {
       },
       { message: 'Number of mines too high for minefield' }
     );
+  });
+  apply(path.minesToPlace, (minesPath) => {
+    minLength(minesPath, 1, { message: 'At least one mine type must be selected' });
+    validate(minesPath, (ctx) => {
+      const mines = ctx.valueOf(path.minesToPlace);
+      const uniquMines = new Set(mines.map((m) => m.type));
+      return uniquMines.size === mines.length
+        ? null
+        : customError({ message: 'Duplicate mine types are not allowed', kind: 'unique-mines' });
+    });
   });
   apply(path.dimensions, (dimPath) => {
     minLength(dimPath, 1, { message: 'At least one dimension is required' });

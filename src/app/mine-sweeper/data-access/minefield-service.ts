@@ -5,8 +5,8 @@ import { GameState } from '../types/game-state';
 import { calculateDenityForDimensions } from '../util/calculate-density';
 import { filter, fromEvent } from 'rxjs';
 import { Mines } from '../util/mineFn';
-import { Mine } from '../types/mine';
-import { liar, sumMines } from '../util/hint';
+import { Mine, MineDef } from '../types/mine';
+import { sumMines } from '../util/hint';
 
 @Injectable({
   providedIn: 'root',
@@ -17,13 +17,14 @@ export class MinefieldService {
   readonly #wrap = signal<boolean[]>([]);
   readonly #mines = signal(0);
   readonly #mineField = signal<MineField | null>(null);
-  readonly #minesToPlace = signal<Mine[]>([Mines.number, Mines.color, Mines.regular]);
   readonly #gameState = signal<GameState>('notStarted');
   readonly #time = signal<{ start: number; end: number | null } | null>(null);
-  readonly #failOnWrongFlags = signal(true);
 
+  readonly failOnWrongFlag = signal(true);
   readonly removeFlaggedMines = signal(false);
   readonly initLazily = signal(true);
+  readonly minesToPlace = signal<MineDef[]>([Mines.regular]);
+  readonly chording = signal(true);
 
   readonly dimensions = this.#dimensions.asReadonly();
   readonly wrap = this.#wrap.asReadonly();
@@ -111,7 +112,7 @@ export class MinefieldService {
     if (!this.playing() || cell.isFlagged()) {
       return;
     }
-    if (cell.isRevealed()) {
+    if (cell.isRevealed() && this.chording()) {
       if (cell.adjacentMines().length === cell.flaggedNeighbors().length) {
         const hiddenNeighbors = cell.hiddenNeighbors();
         hiddenNeighbors.forEach((f) => this.evaluateCellClick(f));
@@ -141,13 +142,16 @@ export class MinefieldService {
     }
     if (cell.isRevealed()) {
       const hiddenNeighbors = cell.hiddenNeighbors();
-      if (cell.adjacentMines().length === hiddenNeighbors.length + cell.flaggedNeighbors().length) {
+      if (
+        this.chording() &&
+        cell.adjacentMines().length === hiddenNeighbors.length + cell.flaggedNeighbors().length
+      ) {
         hiddenNeighbors.forEach((f) => this.evaluateCellFlag(f));
       }
       return;
     }
     cell.state.update((v) => (v === CellState.Hidden ? CellState.Flagged : CellState.Hidden));
-    if (this.#failOnWrongFlags() && !cell.isMine()) {
+    if (this.failOnWrongFlag() && !cell.isMine()) {
       this.gameLost();
       return;
     }
@@ -252,14 +256,18 @@ export class MinefieldService {
       }
       const randomIndex = Math.floor(Math.random() * flatEmptyFields.length);
       const fieldToPlant = flatEmptyFields[randomIndex];
-      fieldToPlant.mine.set(this.randomMine());
+      fieldToPlant.mine.set(this.randomMine(fieldToPlant.coordinates));
     }
   }
 
-  private randomMine(): Mine {
-    const mines = this.#minesToPlace();
+  private randomMine(coordinates: ReadonlyArray<number>): Mine {
+    const mines = this.minesToPlace();
     const randomIndex = Math.floor(Math.random() * mines.length);
-    return mines[randomIndex];
+    const mine = mines[randomIndex];
+    if (!mine) {
+      throw new Error('No mines available to plant.');
+    }
+    return { type: mine.type, fn: mine.fn(coordinates) };
   }
 
   private createEmptyMinefield(dimensions: number[], wrap: boolean[] = []): MineField {
